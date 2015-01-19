@@ -3,6 +3,7 @@
 % cript for reproducing the results from the survey paper 
 %% Some global option
 flag_save_im = 0; % saves images etc.
+saveDir = 'gs_pairs';
 %% Import Survey Responses
 % First, load info on the image pairs used for the survey
 load('../survey_images/ImagePairs_FullSurvey.mat')
@@ -107,6 +108,9 @@ goldStandardPairs = gs_def(pairs_agreement,n_ratings);
 disp('Gold Standard Calculated')
 sum(goldStandardPairs)
 
+
+%% Re-Load Suvey Image
+load('../survey_images/ImCube50_rand_filledInsideNaN.mat') % image cube with machine_precision*rand added to avoid absolute zero intensities 
 if flag_save_im
     for n=1:length(goldStandardPairs);
         if goldStandardPairs(n);
@@ -119,7 +123,7 @@ if flag_save_im
             imagesc(ImCube_rand_filled(:,:,pairRatingSummary(n,3)));
             axis image; axis off
             title( ['rater std ' num2str(pairRatingSummary(n,7))])
-            saveas(gcf,['pair_' num2str(n) '.png']);
+            saveas(gcf,[saveDir filesep 'pair_' num2str(n) '.png']);
         end
     end
 end
@@ -127,8 +131,6 @@ end
 disp(' ')
 disp('---------------- Calculate Image Descriptors Survey ----------------')
 disp(' ')
-load('../survey_images/ImCube50_rand_filledInsideNaN.mat') % image cube with machine_precision*rand added to avoid absolute zero intensities 
-
 window=[5 5];
 MethodResultsForSurveyIm = calculateImageDescriptors(ImCube_rand_filled, mz_rand, window );
 disp('Finished')
