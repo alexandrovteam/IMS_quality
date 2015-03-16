@@ -23,6 +23,7 @@ categoryFunction = @(x)(round(x/categoryThold)*categoryThold);
 [pairRatingSummary, summaryHeaders] = summarisePairRatings(FullSurveyStruct,categoryThold);
 n_ratings = checkNumberRatings(pairRatingSummary,find(~cellfun(@isempty,strfind(summaryHeaders,'slider value'))));
 ratings = ratings(n_ratings==3,:);
+timings = timings(n_ratings==3,:);
 [k_alpha, agreement_table_out] = calcualteKrippendorfAlpha(ratings);
 
 %% Optimise k_alpha
@@ -133,6 +134,16 @@ if flag_save_im
     saveas(gcf','time_vs_slider.png')
 end
 disp('Timing Data Plotted')
+%% Calculate Image Descriptor for images in Survey
+disp(' ')
+disp('---------------- Calculate Image Descriptors Survey ----------------')
+disp(' ')
+window=[5 5];
+load('/survey_images/ImCube50_rand_filledInsideNaN.mat')
+
+MethodResultsForSurveyIm = calculateImageDescriptors(ImCube_rand_filled, mz_rand );
+disp('Image Descriptors Calculated')
+
 %% Determine 'gold standard' image pairs
 n_ratings_target = 3;
 gs_consist_thresh = 0.25;
@@ -147,9 +158,10 @@ disp([num2str(sum(goldStandardPairs)) ' Gold Standard Pairs'])
 load('/survey_images/ImCube50_rand_filledInsideNaN.mat') % image cube with machine_precision*rand added to avoid absolute zero intensities
 disp('All-Pairs Image data loaded')
 
-%% Print Gold Standard Images
-if flag_save_im
-    for gs_thresh = [0.5,0.6,0.8]
+%% Explore Gold Standard Images
+for gs_thresh = [0.5,0.6,0.8] 
+    if flag_save_im
+    
         pairs_agreement=zeros(size(n_ratings));
         pairs_agreement(pair_id(q_vals_pair(alpha_thresh_idx):end)) = 1;
         goldStandardPairs = gs_def(pairs_agreement,n_ratings);
@@ -176,16 +188,18 @@ if flag_save_im
         end
         fclose(f)
     end
-end
-%% Calculate Image Descriptor for images in Survey
+    %% Comparing human judgment Vs Image descriptors
 disp(' ')
-disp('---------------- Calculate Image Descriptors Survey ----------------')
+disp('------------- Comparing human judgment Vs Image descriptors -------------')
 disp(' ')
-window=[5 5];
-load('/survey_images/ImCube50_rand_filledInsideNaN.mat')
 
-MethodResultsForSurveyIm = calculateImageDescriptors(ImCube_rand_filled, mz_rand );
-disp('Image Descriptors Calculated')
+[ComparisonTable, correlation] = createHumanAlgorithmComparisonTable( FullSurveyStruct, MethodResultsForSurveyIm,'goldStandardPairs',goldStandardPairs);
+sign_match = sum(bsxfun(@eq,sign(ComparisonTable(:,4:end)),sign(ComparisonTable(:,3))))/length(ComparisonTable);
+disp(correlation)
+disp(sign_match)
+
+disp('Finished')
+end
 
 %% Comparing human judgment Vs Im
 % Using lasso
