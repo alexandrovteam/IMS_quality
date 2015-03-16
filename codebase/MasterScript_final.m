@@ -159,9 +159,9 @@ load('/survey_images/ImCube50_rand_filledInsideNaN.mat') % image cube with machi
 disp('All-Pairs Image data loaded')
 
 %% Explore Gold Standard Images
-for gs_thresh = [0.5,0.6,0.8] 
+for gs_thresh = [0.5,0.6,0.8]
     if flag_save_im
-    
+        
         pairs_agreement=zeros(size(n_ratings));
         pairs_agreement(pair_id(q_vals_pair(alpha_thresh_idx):end)) = 1;
         goldStandardPairs = gs_def(pairs_agreement,n_ratings);
@@ -189,16 +189,16 @@ for gs_thresh = [0.5,0.6,0.8]
         fclose(f)
     end
     %% Comparing human judgment Vs Image descriptors
-disp(' ')
-disp('------------- Comparing human judgment Vs Image descriptors -------------')
-disp(' ')
-
-[ComparisonTable, correlation] = createHumanAlgorithmComparisonTable( FullSurveyStruct, MethodResultsForSurveyIm,'goldStandardPairs',goldStandardPairs);
-sign_match = sum(bsxfun(@eq,sign(ComparisonTable(:,4:end)),sign(ComparisonTable(:,3))))/length(ComparisonTable);
-disp(correlation)
-disp(sign_match)
-
-disp('Finished')
+    disp(' ')
+    disp('------------- Comparing human judgment Vs Image descriptors -------------')
+    disp(' ')
+    
+    [ComparisonTable, correlation] = createHumanAlgorithmComparisonTable( FullSurveyStruct, MethodResultsForSurveyIm,'goldStandardPairs',goldStandardPairs);
+    sign_match = sum(bsxfun(@eq,sign(ComparisonTable(:,4:end)),sign(ComparisonTable(:,3))))/length(ComparisonTable);
+    disp(correlation)
+    disp(sign_match)
+    
+    disp('Finished')
 end
 
 %% Comparing human judgment Vs Im
