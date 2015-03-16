@@ -6,7 +6,7 @@ function [ComparisonTable, correlation, pval] = createHumanAlgorithmComparisonTa
 %
 %   Uses:
 %   [ComparisonTable, correlation] = createHumanAlgorithmComparisonTable(FullSurveyStruct, MethodResultsForSurveyIm)
-%   [ComparisonTable, correlation] = createHumanAlgorithmComparisonTable(FullSurveyStruct, MethodResultsForSurveyIm, responsesPerPair)
+%   [ComparisonTable, correlation] = createHumanAlgorithmComparisonTable(FullSurveyStruct, MethodResultsForSurveyIm, options.responsesPerPair)
 %
 %   Input:
 %   -   FullSurveyStruct is a struct containing all survey responses for
@@ -15,7 +15,7 @@ function [ComparisonTable, correlation, pval] = createHumanAlgorithmComparisonTa
 %   -   MethodResultsForSurveyIm is a struct containing the calculated
 %       image descriptors for all images in the survey. This variable is
 %       created using the function calculateImageDescriptors().
-%   -   responsesPerPair is the number of responses/pair in
+%   -   options.responsesPerPair is the number of responses/pair in
 %       FullSurveyStruct.
 %       Default value is 3 (3DMassomics Survey)
 %
@@ -35,32 +35,25 @@ function [ComparisonTable, correlation, pval] = createHumanAlgorithmComparisonTa
 %% Input checks
 nPairs = length(FullSurveyStruct.AllImPairs_plan);
 % defaults
-responsesPerPair = 3;
-goldStandardPairs = true(nPairs,1);
-compareFraction = 0.2;
-compareType = 'spearman';
+defaultOptions.responsesPerPair = 3;
+defaultOptions.goldStandardPairs = true(nPairs,1);
+defaultOptions.compareFraction = 0.2;
+defaultOptions.compareType = 'spearman';
 % get varargin
-if mod(length(varargin),2) ~= 0
-    error('varargin arguments must be in pairs')
-end
-
-for n = 1 : length(varargin)/2
-   switch varargin{2*n - 1} 
-       case 'responsesPerPair'
-           responsesPerPair = varargin{2*n}; 
-       case 'goldStandardPairs'
-           goldStandardPairs = varargin{2*n};  
-       case 'compareFraction'
-           compareFraction = varargin{2*n};  
-       case 'compareType'
-           compareType = varargin{2*n};  
-       otherwise
-           error([varargin{2*(n-1) + 1} ': input not recognised'])
+options=defaultOptions;
+if ~isempty(varargin)
+    input_fieldnames = fieldnames(varargin{1});
+    default_fieldnames=fieldnames(defaultOptions);
+    for n=1:length(input_fieldnames)
+        if ~strcmp(input_fieldnames{n},default_fieldnames)
+            error([input_fieldnames{n} ' not in ' default_fieldnames])
+        end
+        options.(input_fieldnames{n}) = varargin{1}.(input_fieldnames{n});
    end
 end
 % check varargins
-if ~isnumeric(responsesPerPair) || ~islogical(goldStandardPairs)
-    error('Input ''responsesPerPair'' must be numeric, Input ''goldStandardPairs'' must be logical.')
+if ~isnumeric(options.responsesPerPair) || ~islogical(options.goldStandardPairs)
+    error('Input ''options.responsesPerPair'' must be numeric, Input ''options.goldStandardPairs'' must be logical.')
 end
 
 if max(FullSurveyStruct.AllImPairs_plan(:)) ~= length(MethodResultsForSurveyIm.method(1).values)
@@ -69,7 +62,7 @@ end
 
 %% Calculate
 % NPairsTotal = size(FullSurveyStruct.AllImPairs_plan,1);
-NPairsTotal = sum(goldStandardPairs);
+NPairsTotal = sum(options.goldStandardPairs);
 
 NMethods = length(MethodResultsForSurveyIm.method);
 
@@ -77,12 +70,12 @@ NMethods = length(MethodResultsForSurveyIm.method);
 ComparisonTable = nan(NPairsTotal, 3+NMethods);
 
 % Get Image pairs and table for slider values
-PairSliderValueTable = createPairSliderValueTable( FullSurveyStruct, responsesPerPair );
-ComparisonTable(:,1:2) = PairSliderValueTable(goldStandardPairs,1:2);
+PairSliderValueTable = createPairSliderValueTable( FullSurveyStruct, options.responsesPerPair );
+ComparisonTable(:,1:2) = PairSliderValueTable(options.goldStandardPairs,1:2);
 
 % Merge slider values into a single value for every pair
 sliderValues_merged = mergeSliderValuesForAllPairs( PairSliderValueTable(:,3:end));
-ComparisonTable(:,3) = sliderValues_merged(goldStandardPairs);
+ComparisonTable(:,3) = sliderValues_merged(options.goldStandardPairs);
 
 % Loop through the different Image descriptors and merge their values into
 % a singel value/pair. Then add it to the ComparisonTable
@@ -96,23 +89,32 @@ end
 
 % Calculate the correlation between the human opinion and the different
 % image descriptors.
-switch compareType
+switch options.compareType
     case 'pearson'
+        size(ComparisonTable)
         [correlation pval]=  corr(ComparisonTable(:,3), ComparisonTable(:,4:end));
-        
     case 'spearman'
          [correlation pval] =  corr(ComparisonTable(:,3), ComparisonTable(:,4:end),'type','spearman');
     case 'kendall'
          [correlation pval] =  corr(ComparisonTable(:,3), ComparisonTable(:,4:end),'type','Kendall');
-        
+    case 'rms'
+        for nn=4:size(ComparisonTable,2)
+            [p,S] = polyfit(ComparisonTable(:,3),ComparisonTable(:,nn),1);
+            correlation(nn-3)=S.normr;
+            pval(nn-3) = sum((ComparisonTable(:,3)-ComparisonTable(:,nn)).^2);
+        end
+%          sq_err= bsxfun(@minus,ComparisonTable(:,4:end),ComparisonTable(:,3)).^2;
+%          [correlation] =  sqrt(mean(sq_err));
+%          pval = sqrt(std(sq_err));
+
     case 'rankFraction'
 %         [~,user_sort_idx] = sort(abs(ComparisonTable(:,3)),'descend');
-%         NPairsTest = floor(compareFraction*NPairsTotal);
+%         NPairsTest = floor(options.compareFraction*NPairsTotal);
 %         for m = 1:NMethods
 %             [~,alg_sort_idx] = sort(abs(ComparisonTable(:,3+m)),'descend');
 %             correlation(m) = sum(ismember(user_sort_idx(1:NPairsTest),alg_sort_idx(1:NPairsTest)))/NPairsTest;
 %         end
-        correlation =  rankFraction(abs(ComparisonTable(:,3)),abs(ComparisonTable(:,4:end)),compareFraction);
+        correlation =  rankFraction(abs(ComparisonTable(:,3)),abs(ComparisonTable(:,4:end)),options.compareFraction);
 	pval = nan;
     otherwise
         error('comparison not know')

@@ -1,4 +1,4 @@
-function ResultsFromImcube = calculateImageDescriptors( ImCube, mz, window )
+function ResultsFromImcube = calculateImageDescriptors( ImCube, mz )
 %   Wrapper function for calculating the image descriptors for a given 
 %   Image cube.
 %       - mzVals is the mz values for the images in ImCube.
@@ -23,9 +23,9 @@ ImCube = normaliseScaleImCube(ImCube);
 % Use appropriate function to calculate the image decriptors
 if useParallel
     fprintf('parallel methods need updating to current set \n')
-%     ResultsFromImcube = evaluateMethodsParallel(ImCube, mz, window);
+%     ResultsFromImcube = evaluateMethodsParallel(ImCube, mz);
 else
-    ResultsFromImcube = evaluateMethods(ImCube, mz, window);
+    ResultsFromImcube = evaluateMethods(ImCube, mz);
 end
 
 end
