@@ -2,18 +2,12 @@ function [val, varargout] = localSTD( I, type, kernelSize, varargin )
 %UNTITLED4 Summary of this function goes here
 %   Detailed explanation goes here
 
-if any([strcmpi(type, 'mean') strcmpi(type, 'median')]) == 0
-    error('Argument ''type'' must be either ''mean'' or ''median''')
-    
-elseif strcmpi(type, 'mean')
-    Istd = stdFilt(I, kernelSize);
-    val = mean(Istd(~isnan(Istd)));
-    
-elseif strcmpi(type, 'median')
-    Istd = stdFilt(I, kernelSize);
-    val = median(Istd(~isnan(Istd)));
-    
+if ~isa(type, 'function_handle')
+     error('argument type should be a function handle')
 end
+% compute metric and return value
+Istd = stdFilt(I, kernelSize);
+val = feval(type,Istd(~isnan(Istd)));
 
 if nargout == 2
     varargout{1} = Istd;

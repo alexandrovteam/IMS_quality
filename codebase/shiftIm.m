@@ -6,7 +6,6 @@ function ImCube = shiftIm( I, kernelSize )
 
 m = kernelSize(1);
 n = kernelSize(2);
-
 if any( [mod(m,2)==0 mod(n,2)==0] )
     error('kernelSize must have an odd number of rows and columns')
 end

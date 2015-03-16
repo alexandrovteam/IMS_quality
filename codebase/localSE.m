@@ -1,16 +1,16 @@
-function [val, varargout] = localCOV( I, type, kernelSize, varargin )
-%UNTITLED4 Summary of this function goes here
+function [val,Ise] = localSE(I,report_func,kernelSize, varargin )
+%NOISEMSE Summary of this function goes here
 %   Detailed explanation goes here
 
-if ~isa(type, 'function_handle')
+if ~isa(report_func, 'function_handle')
      error('argument type should be a function handle')
 end
 % compute metric and return value
-Icov = covFilt(I, kernelSize);
-val = feval(type,Icov(~isnan(Icov)));
+Ise = seFilt(I, kernelSize);
+val = feval(report_func,Ise(~isnan(Ise)));
 
 if nargout == 2
-    varargout{1} = Icov;
+    varargout{1} = Ise;
 end
 
 if nargin >= 4 && varargin{1} == 1
@@ -19,4 +19,6 @@ if nargin >= 4 && varargin{1} == 1
 end
 
 end
+
+
 

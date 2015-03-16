@@ -1,73 +1,108 @@
 % Andrew Palmer
 % 2015
-% cript for reproducing the results from the survey paper 
+% script for reproducing the results from the survey paper
+% run this file from IMS_quality-master
 %% Some global option
 flag_save_im = 0; % saves images etc.
-saveDir = 'gs_pairs';
+saveDir = ['..' filesep];
+addpath(genpath(pwd)) %  but add folders to MATLAB path
 %% Import Survey Responses
 % First, load info on the image pairs used for the survey
-load('../survey_images/ImagePairs_FullSurvey.mat')
+load('/survey_images/ImagePairs_FullSurvey.mat')
 
 % Load Survey Reponses
-importDir ='../consistent_surveys';
+importDir ='/consistent_surveys';
 %FullSurveyStruct = createFullSurveyStruct(importDir, SurveyPairList, ImPairs_rand); % note: scales slider values
-load('../consistent_surveys/FullSurveyStruct.mat')
-disp('Finished')
-%% Optimise k_alpha
+load('/consistent_surveys/FullSurveyStruct.mat')
+disp('Loaded Survey Responses')
+
+% Parse data
 categoryThold = 0.1;% rounding precision, 1/multiple of 10
 categoryFunction = @(x)(round(x/categoryThold)*categoryThold);
 [ratings, timings, rawdata] = generateDataTables(FullSurveyStruct,categoryFunction);
+[pairRatingSummary, summaryHeaders] = summarisePairRatings(FullSurveyStruct,categoryThold);
+n_ratings = checkNumberRatings(pairRatingSummary,find(~cellfun(@isempty,strfind(summaryHeaders,'slider value'))));
+ratings = ratings(n_ratings==3,:);
 [k_alpha, agreement_table_out] = calcualteKrippendorfAlpha(ratings);
 
+%% Optimise k_alpha
 % Remove one question at a time and re-check score
 k_alpha_im = zeros(size(ratings,1),1);
 for n=1:size(ratings,1)
     [k_alpha_im(n)] = calcualteKrippendorfAlpha(ratings(1:size(ratings,1)~=n,:));
 end
 
-% Show results
-figure, 
-subplot(1,2,1)
-stem(100*(k_alpha_im-k_alpha)/k_alpha)
-title('alpha_k with each pair removed')
-xlabel('pair removed idx')
-ylabel('percentage change to alpha_k')
-set(gca,'XLim',[1 length(k_alpha_im)])
-if flag_save_im
-     saveas(gcf,'ka_alpha_eachPair_removed.png')
+% Remove one rater at a time and re-check score
+k_alpha_rater = zeros(size(ratings,2),1);
+for n=1:size(ratings,2)
+    [k_alpha_rater(n)] = calcualteKrippendorfAlpha(ratings(:,1:size(ratings,2)~=n));
 end
+
+% Show results
+figure;
+subplot(1,2,1)
+hist(100*(k_alpha_im-k_alpha)/k_alpha)
+title('alpha_k with each pair removed')
+xlabel('percentage change')
+ylabel('number of pairs')
+
+subplot(1,2,2)
+hist(100*(k_alpha_rater-k_alpha)/k_alpha)
+title('alpha_k with each rater removed')
+xlabel('percentage change')
+ylabel('number of raters')
+
+disp('Leave one out k-alpha calcualted')
+%save('leave_one_out.mat','k_alpha_rater','k_alpha_im')
 %% removing members -> increased k_alpha
 % so want to exclude k_alpha_im with -nv k_alpha change
-% [~,k_alpha_im_idx] = sort(k_alpha_im,'ascend');
-q_vals = (1:10:length(k_alpha_im))/length(k_alpha_im);
-ka_q = zeros(length(q_vals),1);
-for n=1:length(q_vals) % plot at increasing cut-offs
-   ka_q(n) = calcualteKrippendorfAlpha(ratings(k_alpha_im<quantile(k_alpha_im,q_vals(n)),:)); 
+q_vals_pair = 1:length(k_alpha_im);
+[~,pair_id] = sort(k_alpha_im,'descend');%want to remove pairs where removing gave a high k_alpha
+ka_q_pair = zeros(length(q_vals_pair),1);
+for n=1:length(q_vals_pair) % plot at increasing cut-offs
+    %       ka_q_pair(n) = calcualteKrippendorfAlpha(ratings(k_alpha_im<quantile(k_alpha_im,q_vals_pair(n)),:));
+    ka_q_pair(n) = calcualteKrippendorfAlpha(ratings(pair_id(q_vals_pair(n):end),:));
 end
-subplot(1,2,2),
-plot(q_vals, ka_q)
-set(gca,'YLim',[0 1])
-title('alpha_k with images removed - removing poorly performing individuals (below quintile)')
-xlabel('quintile')
-ylabel('alpha_k')
 
-% - choose quintile
-flag_auto = 1;
+q_vals_rater = 1:length(k_alpha_rater);
+[~,rater_id] = sort(k_alpha_rater,'descend');
+ka_q_rater = zeros(length(q_vals_rater),1);
+for n=1:length(q_vals_rater) % plot at increasing cut-offs
+    %    ka_q_rater(n) = calcualteKrippendorfAlpha(ratings(k_alpha_rater<quantile(k_alpha_rater,q_vals_rater(n)),:));
+    ka_q_rater(n) = calcualteKrippendorfAlpha(ratings(:,rater_id(q_vals_rater(n):end)));
+    n_im_rater(n)= sum(sum(~isnan(ratings(:,rater_id(q_vals_rater(n):end))),2)==3);
+end
+% save('opt_kalpha.mat','ka_q_rater','ka_q_pair')
+figure
+set(gcf,'color','w')
+subplot(2,1,1),
+plot_alpha_curve(q_vals_pair,ka_q_pair,[0.5,0.6,0.8,0.9], 'pairs')
+subplot(2,1,2),
+plot_alpha_curve(q_vals_rater,ka_q_rater,[0.5,0.6,0.8,0.9], 'raters',n_im_rater)
+if flag_save_im
+    saveas(gcf,'alpha_curves.png')
+    saveas(gcf,'alpha_curves.fig')
+end
+%% Choose k-alpha cutoff
+flag_auto = 0;
 if flag_auto
-    [~,q_val_idx] = max(ka_q);
-    q_val = q_vals(q_val_idx);
+    [~,alpha_thresh_idx] = max(ka_q_pair);
 else
-    q_val = input('Enter quintile  ', 's');
+    alpha_target = input('Enter threshold  ', 's');
+    [~,alpha_thresh_idx] = min(abs(ka_q_pair-str2double(alpha_target)));
 end
-pairs_agreement = k_alpha_im<quantile(k_alpha_im,q_val);
-disp(sum(pairs_agreement))
 
+pairs_agreement=zeros(size(n_ratings));
+pairs_agreement(pair_id(q_vals_pair(alpha_thresh_idx):end)) = 1;
+
+disp(sum(pairs_agreement))
+disp('Systematic rater removal calcualted')
 %% Plot time against slider std
 
-tmp_timings=timings'; 
+tmp_timings=timings';
 tmp_timings=reshape(tmp_timings(~isnan(tmp_timings)),3,[]); % time per pair (lose user information)
-tmp_ratings=ratings'; 
-tmp_ratings=reshape(tmp_ratings(~isnan(tmp_ratings)),3,[]); % time per pair (lose user information)
+tmp_ratings=ratings';
+tmp_ratings=reshape(tmp_ratings(~isnan(tmp_ratings)),3,[]); % rating per pair (lose user information)
 
 figure('color','w')
 subplot(1,2,1)
@@ -95,8 +130,9 @@ ylabel('standard deviation of slider value','FontSize',18)
 xlim([0 quantile(mean(tmp_timings),0.995)])
 
 if flag_save_im
-     saveas(gcf','time_vs_slider.png')
+    saveas(gcf','time_vs_slider.png')
 end
+disp('Timing Data Plotted')
 %% Determine 'gold standard' image pairs
 n_ratings_target = 3;
 gs_consist_thresh = 0.25;
@@ -104,27 +140,41 @@ gs_consist_thresh = 0.25;
 n_ratings = checkNumberRatings(pairRatingSummary,find(~cellfun(@isempty,strfind(summaryHeaders,'slider value'))));
 
 gs_def=@(x,y) x & y==n_ratings_target;
+
 goldStandardPairs = gs_def(pairs_agreement,n_ratings);
-disp('Gold Standard Calculated')
-sum(goldStandardPairs)
-
-
+disp([num2str(sum(goldStandardPairs)) ' Gold Standard Pairs'])
 %% Re-Load Suvey Image
-load('../survey_images/ImCube50_rand_filledInsideNaN.mat') % image cube with machine_precision*rand added to avoid absolute zero intensities 
+load('/survey_images/ImCube50_rand_filledInsideNaN.mat') % image cube with machine_precision*rand added to avoid absolute zero intensities
+disp('All-Pairs Image data loaded')
+
+%% Print Gold Standard Images
 if flag_save_im
-    for n=1:length(goldStandardPairs);
-        if goldStandardPairs(n);
-            subplot(1,2,1);
-            imagesc(ImCube_rand_filled(:,:,pairRatingSummary(n,2)));
-            title(['Pair index:' num2str(n) '. Average rater value: '  num2str(mean(pairRatingSummary(n,4:6)))])
-            
-            axis image; axis off
-            subplot(1,2,2);
-            imagesc(ImCube_rand_filled(:,:,pairRatingSummary(n,3)));
-            axis image; axis off
-            title( ['rater std ' num2str(pairRatingSummary(n,7))])
-            saveas(gcf,[saveDir filesep 'pair_' num2str(n) '.png']);
+    for gs_thresh = [0.5,0.6,0.8]
+        pairs_agreement=zeros(size(n_ratings));
+        pairs_agreement(pair_id(q_vals_pair(alpha_thresh_idx):end)) = 1;
+        goldStandardPairs = gs_def(pairs_agreement,n_ratings);
+        save_dir = [saveDir filesep strrep(num2str(gs_thresh),'.','_') filesep];
+        if ~exist(save_dir,'dir')
+            mkdir(save_dir)
         end
+        f = fopen([save_dir 'pair_ratings.csv'],'w');
+        pair_ratings_header ='Pair Number,Pair Rating,Pair Rating Std\n';
+        fprintf(f,pair_ratings_header);
+        for n=1:length(goldStandardPairs);
+            if goldStandardPairs(n);
+                subplot(1,2,1);
+                imagesc(ImCube_rand_filled(:,:,pairRatingSummary(n,2)));
+                title(['Pair index:' num2str(n) '. Average rater value: '  num2str(mean(pairRatingSummary(n,4:6)))])
+                axis image; axis off
+                subplot(1,2,2);
+                imagesc(ImCube_rand_filled(:,:,pairRatingSummary(n,3)));
+                axis image; axis off
+                title( ['rater std ' num2str(pairRatingSummary(n,7))])
+                saveas(gcf,[save_dir 'pair_' num2str(n) '.png']);
+                fprintf(f,[num2str(n) ',' num2str(mean(pairRatingSummary(n,4:6))) ',' num2str(std(pairRatingSummary(n,4:6))) '\n']);
+            end
+        end
+        fclose(f)
     end
 end
 %% Calculate Image Descriptor for images in Survey
@@ -132,46 +182,29 @@ disp(' ')
 disp('---------------- Calculate Image Descriptors Survey ----------------')
 disp(' ')
 window=[5 5];
-MethodResultsForSurveyIm = calculateImageDescriptors(ImCube_rand_filled, mz_rand, window );
-disp('Finished')
+load('/survey_images/ImCube50_rand_filledInsideNaN.mat')
 
-%% Comparing human judgment Vs Image descriptors
-disp(' ')
-disp('------------- Comparing human judgment Vs Image descriptors -------------')
-disp(' ')
+MethodResultsForSurveyIm = calculateImageDescriptors(ImCube_rand_filled, mz_rand );
+disp('Image Descriptors Calculated')
 
-[ComparisonTable, correlation] = createHumanAlgorithmComparisonTable( FullSurveyStruct, MethodResultsForSurveyIm,'goldStandardPairs',goldStandardPairs);
-sign_match = sum(bsxfun(@eq,sign(ComparisonTable(:,4:end)),sign(ComparisonTable(:,3))))/length(ComparisonTable);
-disp(correlation)
-disp(sign_match)
-
-disp('Finished')
-
-% Create a group algorithm metric
-%       [idx_1 idx_2 slider 'COVmean' 'COVmedian' 'SNRmean' 'SNRmedian' 'MSE' 'SpatialChaos' 'STDmean' 'STDmedian']
-alg_idx = [1     1     1       0          1            0         1        1         1           0           1]; 
-alg_idx = logical(alg_idx);
-[x_keep_lin, fval_keep_lin,test_corr, p_val_test] = createGroupAlgorithmMeasure(ComparisonTable(:,alg_idx));
-[~,idx] = max(fval_keep_lin); 
-
-disp('Metrics included')
-alg_idx=alg_idx(4:end); % just record algorithms used
-disp(alg_idx)
-
-disp('Median test correlation')
-disp(median(test_corr(:)))
-[v,max_fval_idx] = max(test_corr,[],2);
-
-% take statistical average of high scoring coefficients and check it against data.
-group_coeffs = mean(x_keep_lin(:,test_corr>max(correlation(alg_idx))),2);
-group_coeffs = group_coeffs/(10^mean(real(log10(group_coeffs)))); %scale out crazy high powers of 10
-disp('Group Coefficients')
-disp(group_coeffs')
-
-paper_group_coeffs =   [0.10; 0.08; 5.05; 1.65; 0.11; 0.97];
-group_coeff = paper_group_coeffs;
-
-tmp_ComparisonTable = ComparisonTable(:,[true true true alg_idx]);
-group_score = linearAlgorithmCombination(tmp_ComparisonTable(:,4:end),group_coeffs');
+%% Comparing human judgment Vs Im
+% Using lasso
+%Construct the lasso fit using ten-fold cross validation. Include the FitInfo output so you can plot the result.
+X = ComparisonTable(:,4:end);
+X(~isfinite(X)) = nan;% should ignore any column with Inf entry
+[B, FitInfo] = lasso(ComparisonTable(:,4:end),ComparisonTable(:,3),'CV',10);
+% Plot the cross-validated fits.
+lassoPlot(B,FitInfo,'PlotType','CV');
+%% Calc correlation of best
+X_0 = X;
+X_0(isnan(X_0)) = 0;
+group_score = linearAlgorithmCombination(X_0,[B(:,FitInfo.IndexMinMSE); 0]');
+labels([false;false;false; B(:,FitInfo.IndexMinMSE)>0])
 disp(corr(ComparisonTable(:,3),group_score ))
 disp(sum(bsxfun(@eq,sign(group_score - mean(group_score)),sign(ComparisonTable(:,3))))/length(ComparisonTable))
+%% Look at inclusion lists
+idx = 1:167;
+inc_count = (sum(B>0,2));
+figure, stem(inc_count(inc_count>0))
+set(gca,'XTick',1:sum(inc_count>0));
+set(gca,'XTickLabel',labels([false;false;false; inc_count>0]))
